@@ -117,7 +117,7 @@ function SnapshotScreen() {
   )
 }
 
-// ── Screen 3: AI Plan ────────────────────────────────────────
+// ── Screen 3: AI Plan ───────────────────────────────────────
 function PlanScreen() {
   const { aiResult } = useAppData()
   const navigate = useNavigate()
