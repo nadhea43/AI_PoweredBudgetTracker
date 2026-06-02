@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { AppProvider, useAppData } from './context/AppContext'
+import { generateFinancialAnalysis } from './services/api'
 
 import OnboardingForm    from './components/OnboardingForm'
 import FinancialSnapshot from './components/FinancialSnapshot'
@@ -25,64 +26,14 @@ function FormScreen() {
     setError(null)
 
     try {
-      // Dummy snapshot
-      const snapshot = {
-        name:  formData.name,
-        state: formData.state,
-        gross_salary:       formData.gross_salary,
-        take_home:          2462.55,
-        epf:                308.00,
-        socso:              12.35,
-        eis:                3.70,
-        pcb:                11.50,
-        total_commitments:  1200,
-        total_spending:     700,
-        remaining:          562.55,
-        benchmark: { median_income: 5974, mean_expenditure: 5228 },
-        risk_flags: [],
-      }
+      const { snapshot, plan } = await generateFinancialAnalysis(formData)
       setSnapshotData(snapshot)
+      setAiResult(plan)
       navigate('/snapshot')  // → /snapshot
 
-      // Dummy AI plan
-      const plan = {
-        financial_health_score: 62,
-        health_label: 'At Risk',
-        budget_allocation: {
-          needs:   { amount: 1400, percentage: 57 },
-          wants:   { amount: 500,  percentage: 20 },
-          savings: { amount: 562,  percentage: 23 },
-        },
-        ranked_recommendations: [
-          {
-            rank: 1,
-            action: 'Cook at home 4 days a week',
-            monthly_impact: 180,
-            difficulty: 'Easy',
-            reasoning: 'Your food spending of RM 700 is above the state average. Reducing Grab orders is your highest-impact change.',
-          },
-          {
-            rank: 2,
-            action: 'Switch to public transport 3 days a week',
-            monthly_impact: 120,
-            difficulty: 'Medium',
-            reasoning: 'Transport costs are your second largest variable expense. MRT/LRT can cut this significantly.',
-          },
-        ],
-        savings_projection: [
-          { month: 'Jul', projected_savings: 562  },
-          { month: 'Aug', projected_savings: 1124 },
-          { month: 'Sep', projected_savings: 1686 },
-          { month: 'Oct', projected_savings: 2248 },
-          { month: 'Nov', projected_savings: 2810 },
-          { month: 'Dec', projected_savings: 3372 },
-        ],
-        goal_status: 'At your current rate, you will reach RM 10,000 in 18 months. Following the plan above gets you there in 14 months.',
-      }
-      setAiResult(plan)
-
     } catch (err) {
-      setError('An error occurred while processing your data. Please try again.')
+      const message = err?.response?.data?.error || err?.message || 'An error occurred while processing your data. Please try again.'
+      setError(message)
     } finally {
       setIsLoading(false)
     }

@@ -1,0 +1,10 @@
+data/processed/
+ai_powered_budget_tracker.egg-info/
+scripts/__pycache__
+.env
+pyproject.toml
+uv.lock
+.venv/
+.ruff_cache/
+backend/week_2/jobs_d1.db
+backend/week_2/rate_limits.txt

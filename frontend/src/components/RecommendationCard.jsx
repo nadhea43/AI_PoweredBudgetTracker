@@ -23,10 +23,11 @@ export default function RecommendationCard({rec}) {
 
             {/* Monthly Saving */}
             <div className="ml-9">
-                <p className="text-green-600 font-semibold textt-sm mb-1">
+                {/* comment untuk sementara waktu */}
+                {/* <p className="text-green-600 font-semibold text-sm mb-1">
                     save RM {rec.monthly_impact}/month
-                </p>
-                {/* AI reasonung */}
+                </p> */}
+                {/* AI reasoning */}
                 <p className="text-gray-500 text-xs leading-relaxed">{rec.reasoning}</p>
             </div>
 
