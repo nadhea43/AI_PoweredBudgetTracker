@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from dotenv import load_dotenv
 from gemini_client import generate_text
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(dotenv_path=PROJECT_ROOT / ".env")
@@ -223,11 +225,14 @@ def build_snapshot(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, A
     gross_salary = round_currency(safe_float(payload.get("gross_salary")))
     deductions = estimate_deductions(gross_salary)
 
+    phone_bill_raw = safe_float(payload.get("phone_bill"))
+    phone_bill = phone_bill_raw if phone_bill_raw <= 500 else 0.0
+
     commitments = round_currency(
         safe_float(payload.get("rent"))
         + safe_float(payload.get("study_loan"))
         + safe_float(payload.get("car_loan"))
-        + safe_float(payload.get("phone_bill"))
+        + phone_bill
     )
     spending = round_currency(
         safe_float(payload.get("food_spending"))
@@ -486,8 +491,15 @@ def build_plan(snapshot: dict[str, Any], benchmark: dict[str, Any], payload: dic
                 "monthly_impact": 150,
                 "reasoning": "Your transport spending is currently high. Utilizing the My50 unlimited travel pass in the Klang Valley will immediately slash your transit costs."
             }},
-            {{
+              {{
                 "rank": 2,
+                "action": "Switch to a monthly public transport pass",
+                "difficulty": "Easy",
+                "monthly_impact": 150,
+                "reasoning": "Your transport spending is currently high. Utilizing the My50 unlimited travel pass in the Klang Valley will immediately slash your transit costs."
+            }},
+            {{
+                "rank": 3,
                 "action": "Cook mid-week meals at home",
                 "difficulty": "Medium",
                 "monthly_impact": 300,
@@ -507,8 +519,18 @@ def build_plan(snapshot: dict[str, Any], benchmark: dict[str, Any], payload: dic
     """
 
     try:
-        ai_response = generate_text(prompt, max_tokens=1200, temperature=0.2)
-        plan_data = json.loads(ai_response.strip())
+        
+        ai_response = generate_text(prompt, max_tokens=1200, temperature=0.2, json_mode=True)
+
+         # ── Strip markdown code fences if present ──
+        cleaned = ai_response.strip()
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+        cleaned = cleaned.strip()
+        # ───────────────────────────────────────────
+
+        plan_data = json.loads(cleaned)
+        #plan_data = json.loads(ai_response.strip())
         return plan_data
         
     except Exception as e:
@@ -539,6 +561,8 @@ def build_plan(snapshot: dict[str, Any], benchmark: dict[str, Any], payload: dic
 def analyze_profile(payload: dict[str, Any]) -> dict[str, Any]:
     snapshot, benchmark = build_snapshot(payload)
     plan = build_plan(snapshot, benchmark, payload)
+     # Add goal_amount to plan so frontend can access it
+    plan["goal_amount"] = safe_float(payload.get("savings_goal"), 5000)
     finance_gaps = build_finance_gaps({**snapshot, **payload}, benchmark, plan)
 
     # ── NEW: Generate Gemini summary for the frontend component ──
