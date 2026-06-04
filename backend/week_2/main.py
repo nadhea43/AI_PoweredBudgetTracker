@@ -10,8 +10,10 @@ from typing import Any
 from dotenv import load_dotenv
 from gemini_client import generate_text
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(dotenv_path=PROJECT_ROOT / ".env")
+try:
+    PROJECT_ROOT = Path(__file__).resolve().parents[2]
+except IndexError:
+    PROJECT_ROOT = Path(__file__).resolve().parent
 
 DATA_DIR = PROJECT_ROOT / "data" / "processed"
 SUMMARY_PATH = DATA_DIR / "hies_state_summary.json"
@@ -449,96 +451,231 @@ def build_goal_status(snapshot: dict[str, Any], ranked_recommendations: list[dic
 def build_plan(snapshot: dict[str, Any], benchmark: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
     """Generates a dynamic financial plan matching the exact property keys of the frontend components."""
     
-    take_home = snapshot.get('take_home', 0)
-    # Safely get the target savings goal amount from payload to pass back to the chart
-    goal_amount = payload.get('savings_goal_amount', 5000) 
-    
+    # ── STEP 1: Extract base values ────────────────────────────────────────────
+    # Ambik dari snapshot (dah dikira dalam build_snapshot)
+    take_home         = snapshot.get('take_home', 0)
+    total_commitments = snapshot.get('total_commitments', 0)  # rent + loan + phone
+    total_spending    = snapshot.get('total_spending', 0)     # food + transport + entertainment
+    remaining         = max(snapshot.get("remaining", 0), 0)  # take_home - commitments - spending
+
+    # Ambik dari payload (user input: savings goal & timeframe)
+    goal_amount   = safe_float(payload.get("savings_goal"), 0)
+    target_months = int(safe_float(payload.get("goal_months"), 6)) or 6
+
+    # ── STEP 2: Goal-driven calculations ───────────────────────────────────────
+    # Berapa user KENA save setiap bulan untuk reach goal dalam timeframe
+    monthly_needed   = round(goal_amount / target_months, 2) if goal_amount and target_months else 0
+
+    # Berapa user BOLEH save (actual duit tinggal selepas semua expenses)
+    monthly_saveable = remaining
+
+    # ── STEP 3: Achievability check ────────────────────────────────────────────
+    # Boleh ke user reach goal dalam timeframe yang ditetapkan?
+    total_saveable_in_timeframe = round(monthly_saveable * target_months, 2)
+    is_achievable = total_saveable_in_timeframe >= goal_amount if goal_amount > 0 else True
+
+     # Berapa bulan sebenarnya untuk reach goal (ikut current pace)
+    actual_months_to_goal = math.ceil(goal_amount / monthly_saveable) if monthly_saveable > 0 and goal_amount > 0 else None
+
+    # ── STEP 4: Budget allocation ──────────────────────────────────────────────
+    # Needs = fixed commitments sahaja (rent, loan, phone — non-negotiable)
+    actual_needs = round(total_commitments, 2)
+    needs_pct    = round(actual_needs / take_home, 4) if take_home else 0
+
+    # Variable spending — already spent by user (food, transport, entertainment)
+    actual_wants = round(total_spending, 2)
+
+    # Savings % — driven by goal, floored at 20%, capped at 60%
+    raw_savings_pct = monthly_needed / take_home if take_home else 0.20
+    savings_pct     = max(0.20, raw_savings_pct)
+    savings_pct     = min(savings_pct, 0.60)
+
+    # Wants % = remainder after needs and savings (minimum 5%)
+    wants_pct = max(round(1 - needs_pct - savings_pct, 4), 0.05)
+
+    # Adjust savings if wants terlalu ketat
+    if wants_pct == 0.05:
+        savings_pct = round(1 - needs_pct - 0.05, 4)
+
+    # Final RM amounts
+    needs_amount    = actual_needs
+    savings_amount  = min(round(take_home * savings_pct, 2), remaining)  # cap at remaining
+    savings_pct     = round(savings_amount / take_home, 4) if take_home else savings_pct
+    wants_amount    = round(take_home - needs_amount - savings_amount, 2)
+    wants_pct       = round(wants_amount / take_home, 4) if take_home else wants_pct
+    wants_remaining = round(wants_amount - actual_wants, 2)  # buffer yang masih boleh spent
+
+    # ── STEP 5: Savings projection ─────────────────────────────────────────────  ← WAS MISSING
+    savings_projection = [
+        {
+            "month": f"M{i}",
+            "projected_savings": round(monthly_saveable * i, 2),
+            "needed_savings":    round(monthly_needed * i, 2),
+            "goal_amount":       goal_amount
+        }
+        for i in range(1, target_months + 1)
+    ]
+
+    # ── STEP 6: Goal status ────────────────────────────────────────────────────  ← WAS MISSING
+    if goal_amount <= 0:
+        goal_status = "Enter a savings goal to see your projection."
+
+    elif monthly_saveable <= 0:
+        goal_status = "Your cash flow is negative. Reduce expenses before targeting a savings goal."
+
+    elif not is_achievable:
+        shortfall_total = round(goal_amount - total_saveable_in_timeframe, 2)
+        suggested_goal  = round(monthly_saveable * target_months, -2)
+        goal_status = (
+            f"Your goal of RM {goal_amount:,.0f} is not achievable in {target_months} months. "
+            f"Saving all your remaining cash (RM {monthly_saveable:,.2f}/month), "
+            f"you can only reach RM {total_saveable_in_timeframe:,.0f} — "
+            f"short by RM {shortfall_total:,.0f}. "
+            f"Realistic options: extend to {actual_months_to_goal} months, "
+            f"or adjust your goal to RM {suggested_goal:,.0f}."
+        )
+
+    elif actual_months_to_goal <= target_months:
+        months_ahead = target_months - actual_months_to_goal
+        goal_status = (
+            f"You are on track to reach RM {goal_amount:,.0f} in {actual_months_to_goal} months"
+            f"{f' — {months_ahead} months ahead of your {target_months}-month target.' if months_ahead > 0 else '.'}"
+        )
+
+    else:
+        shortfall_per_month = round(monthly_needed - monthly_saveable, 2)
+        goal_status = (
+            f"At your current pace you will reach RM {goal_amount:,.0f} in {actual_months_to_goal} months, "
+            f"but your target is {target_months} months. "
+            f"Save an extra RM {shortfall_per_month:,.2f}/month to hit your target on time."
+        )
+
+
+    # ── STEP 7: Gemini prompt — only for subjective intelligence ──────────────
+    # Gemini handle: health score, label, benchmark comparison, recommendations
+    # Python handle: semua nombor (budget, projection, goal status)
     prompt = f"""
-    You are an expert Malaysian financial advisor. Analyze this graduate profile and return a clean JSON dataset matching the requested schema.
-    
+    You are an expert Malaysian financial advisor. Analyze this graduate profile and return a clean JSON dataset.
+
     User Parameters:
     - Gross Salary: RM {snapshot.get('gross_salary')}
     - Take-Home Net Pay: RM {take_home}
-    - Total Fixed Commitments: RM {snapshot.get('total_commitments')}
-    - Total Variable Spending: RM {snapshot.get('total_spending')}
-    
-    Tasks to perform:
-    1. Calculate a comprehensive financial health score out of 100 based on their commitments relative to take-home pay. 
-    2. Allocate budget across Needs, Wants, and Savings dynamically (Ensure percentages add up to 100%, and calculate relative RM amounts using take-home pay {take_home}).
-    3. Generate exactly 2 targeted ranked recommendations. For the 'difficulty' field, choose ONLY from 'Easy', 'Medium', or 'Hard'.
-    4. Provide a cumulative 6-month savings projection array tracking monthly progressive savings accumulation.
+    - Total Fixed Commitments: RM {total_commitments}
+    - Total Variable Spending: RM {total_spending}
+    - Remaining Cash: RM {remaining}
+    - Savings Goal: RM {goal_amount} in {target_months} months
+    - Required Monthly Saving: RM {monthly_needed}
+    - Current Monthly Saveable: RM {monthly_saveable}
+    - Goal Achievable: {"Yes" if is_achievable else "No"}
 
-    Return a JSON object that strictly adheres to this structure:
+    Tasks:
+    1. Calculate a financial health score out of 100 based on commitments vs take-home pay.
+    2. Generate exactly 3 personalised ranked recommendations to help user reach their goal.
+       For 'difficulty' choose ONLY from: 'Easy', 'Medium', 'Hard'.
+
+    Return ONLY this JSON structure, nothing else, no markdown:
     {{
         "financial_health_score": 75,
         "health_label": "Healthy Buffer",
         "benchmark_comparison": "Slightly above regional average",
-        "budget_allocation": {{
-            "needs": {{"percentage": 50, "amount": {int(take_home * 0.5)}}},
-            "wants": {{"percentage": 30, "amount": {int(take_home * 0.3)}}},
-            "savings": {{"percentage": 20, "amount": {int(take_home * 0.2)}}}
-        }},
         "ranked_recommendations": [
             {{
                 "rank": 1,
-                "action": "Switch to a monthly public transport pass",
+                "action": "action text here",
                 "difficulty": "Easy",
                 "monthly_impact": 150,
-                "reasoning": "Your transport spending is currently high. Utilizing the My50 unlimited travel pass in the Klang Valley will immediately slash your transit costs."
+                "reasoning": "reasoning text here"
             }},
             {{
                 "rank": 2,
-                "action": "Cook mid-week meals at home",
+                "action": "action text here",
                 "difficulty": "Medium",
-                "monthly_impact": 300,
-                "reasoning": "Food delivery and dining out are eroding your variable buffer. Meal prepping 3 days a week will secure this extra monthly saving easily."
+                "monthly_impact": 100,
+                "reasoning": "reasoning text here"
+            }},
+             {{
+                "rank": 3,
+                "action": "action text here",
+                "difficulty": "hard",
+                "monthly_impact": 150,
+                "reasoning": "reasoning text here"
             }}
-        ],
-        "savings_projection": [
-            {{"month": "M1", "projected_savings": {int(take_home * 0.2 * 1)}}},
-            {{"month": "M2", "projected_savings": {int(take_home * 0.2 * 2)}}},
-            {{"month": "M3", "projected_savings": {int(take_home * 0.2 * 3)}}},
-            {{"month": "M4", "projected_savings": {int(take_home * 0.2 * 4)}}},
-            {{"month": "M5", "projected_savings": {int(take_home * 0.2 * 5)}}},
-            {{"month": "M6", "projected_savings": {int(take_home * 0.2 * 6)}}}
-        ],
-        "goal_status": "Your trajectory looks solid. Stick to your core savings routine to secure a comfortable emergency safety net."
+        ]
     }}
     """
 
     try:
         ai_response = generate_text(prompt, max_tokens=1200, temperature=0.2)
         plan_data = json.loads(ai_response.strip())
+
+        # ── STEP 8: Inject all Python-calculated fields (override Gemini) ──────
+        plan_data["budget_allocation"] = {
+            "needs": {
+                "percentage": int(round(needs_pct * 100)),
+                "amount": needs_amount,
+            },
+            "wants": {
+                "percentage": int(round(wants_pct * 100)),
+                "amount": wants_amount,
+                "actual_spent": actual_wants,         # ← food + transport + entertainment
+                "remaining_buffer": wants_remaining,  # ← wants_amount - actual_wants
+            },
+            "savings": {
+                "percentage": int(round(savings_pct * 100)),
+                "amount": savings_amount,
+                "monthly_needed": monthly_needed,     # ← goal / target_months
+            }
+        }
+        plan_data["savings_projection"]    = savings_projection
+        plan_data["goal_status"]           = goal_status
+        plan_data["goal_amount"]           = goal_amount
+        plan_data["monthly_needed"]        = monthly_needed
+        plan_data["monthly_saveable"]      = monthly_saveable
+        plan_data["actual_months_to_goal"] = actual_months_to_goal
+        plan_data["is_achievable"]         = is_achievable
+
         return plan_data
-        
+
     except Exception as e:
         print(f"ERROR PARSING GEMINI PLAN: {e}")
-        # Static failsafe matching your EXACT frontend property needs
+
+        # ── STEP 9: Full fallback — app still works without Gemini ────────────
         return {
             "financial_health_score": 60,
             "health_label": "Calculated Baseline",
             "benchmark_comparison": "Aligned with average cohorts",
-            "budget_allocation": {
-                "needs": {"percentage": 50, "amount": int(take_home * 0.5)},
-                "wants": {"percentage": 30, "amount": int(take_home * 0.3)},
-                "savings": {"percentage": 20, "amount": int(take_home * 0.2)}
-            },
             "ranked_recommendations": [
                 {
-                    "rank": 1, 
-                    "action": "Review Subscription Commitments", 
-                    "difficulty": "Easy", 
-                    "monthly_impact": 50, 
-                    "reasoning": "Audit streaming platforms or digital memberships to ensure you aren't leaking passive cash flow."
+                    "rank": 1,
+                    "action": "Automate savings transfer on payday",
+                    "difficulty": "Easy",
+                    "monthly_impact": round(monthly_needed * 0.1, 2),
+                    "reasoning": "Paying yourself first ensures savings happen before discretionary spending."
                 }
             ],
-            "savings_projection": [{"month": f"M{i}", "projected_savings": int(take_home * 0.2 * i)} for i in range(1, 7)],
-            "goal_status": "Continue recording active transactions to generate contextual tracking updates."
+            # Same Python-calculated fields — consistent even in fallback
+            "budget_allocation": {
+                "needs":   {"percentage": int(round(needs_pct * 100)),   "amount": needs_amount},
+                "wants":   {"percentage": int(round(wants_pct * 100)),   "amount": wants_amount},
+                "savings": {"percentage": int(round(savings_pct * 100)), "amount": savings_amount},
+            },
+            "savings_projection":    savings_projection,
+            "goal_status":           goal_status,
+            "goal_amount":           goal_amount,
+            "monthly_needed":        monthly_needed,
+            "monthly_saveable":      monthly_saveable,
+            "actual_months_to_goal": actual_months_to_goal,
+            "is_achievable":         is_achievable
         }
-
+    
+        
+   
 def analyze_profile(payload: dict[str, Any]) -> dict[str, Any]:
     snapshot, benchmark = build_snapshot(payload)
+    snapshot["savings_goal"] = safe_float(payload.get("savings_goal"), 0)
+    snapshot["goal_months"] = int(safe_float(payload.get("goal_months"), 6)) or 6
     plan = build_plan(snapshot, benchmark, payload)
+    plan["goal_amount"] = safe_float(payload.get("savings_goal"), 5000)
     finance_gaps = build_finance_gaps({**snapshot, **payload}, benchmark, plan)
 
     # ── NEW: Generate Gemini summary for the frontend component ──

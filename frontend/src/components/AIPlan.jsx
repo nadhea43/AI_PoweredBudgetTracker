@@ -44,36 +44,128 @@ export default function AIPlan({ data, onContinue }) {
                 </div>
             </div>
 
-            {/* card2: Budget Allocation */}
+            {/* Card 2: Budget Allocation */}
             <div className="bg-white rounded-xl border border-gray-200 p-6 mb-4">
-                <h2 className="font-semibold text-gray-800 mb-4">Recommended Budget Split</h2>
-                <div className="grid grid-cols-3 gap-3">
-                    {[
-                        {label: "Needs", key: "needs", color: "bg-blue-500"},
-                        {label: "Wants", key: "wants", color: "bg-purple-400" },
-                        {label: "Savings", key: "savings", color: "bg-green-500" },
-                     ].map(({ label, key, color }) => {
-                        // Safe extraction for dynamic budget arrays
-                        const percentage = data?.budget_allocation?.[key]?.percentage ?? 0;
-                        const amount = data?.budget_allocation?.[key]?.amount ?? 0;
-                        
-                        return (
-                            <div key={key} className="text-center">
-                                <div className={`${color} rounded-lg p-3 mb-2`}>
-                                    <p className="text-white font-bold text-lg">
-                                        {percentage}%
-                                    </p>
-                                </div>
-                                <p className="text-xs font-medium text-gray-700">{label}</p>
-                                <p className="text-xs text-gray-400">
-                                    RM {amount.toLocaleString()}
-                                </p>
+                <h2 className="font-semibold text-gray-800 mb-1">Recommended Budget Split</h2>
+                <p className="text-xs text-gray-400 mb-4">
+                    Based on your actual expenses and savings goal
+                </p>
+
+                <div className="flex flex-col gap-3">
+
+                    {/* NEEDS */}
+                    <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+                        <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2">
+                                <span className="text-blue-500 text-base">💙</span>
+                                <span className="text-sm font-semibold text-blue-700">Needs</span>
+                                <span className="bg-blue-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                                    {data?.budget_allocation?.needs?.percentage ?? 0}%
+                                </span>
                             </div>
-                        );
-                     })}
+                            <span className="text-sm font-bold text-blue-700">
+                                RM {(data?.budget_allocation?.needs?.amount ?? 0).toLocaleString()}
+                            </span>
+                        </div>
+                        <p className="text-xs text-blue-500">
+                            Your non-negotiable monthly commitments — rent, loans, and bills you must pay.
+                        </p>
+                    </div>
+
+                    {/* WANTS */}
+                    <div className="rounded-lg border border-purple-100 bg-purple-50 p-4">
+                        <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2">
+                                <span className="text-purple-500 text-base">💜</span>
+                                <span className="text-sm font-semibold text-purple-700">Wants</span>
+                                <span className="bg-purple-400 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                                    {data?.budget_allocation?.wants?.percentage ?? 0}%
+                                </span>
+                            </div>
+                            <span className="text-sm font-bold text-purple-700">
+                                RM {(data?.budget_allocation?.wants?.amount ?? 0).toLocaleString()}
+                            </span>
+                        </div>
+                        <p className="text-xs text-purple-500 mb-2">
+                            Food, transport, entertainment and daily variable spending.
+                        </p>
+
+                        {/* Progress bar */}
+                        <div className="w-full bg-purple-200 rounded-full h-1.5 mb-2">
+                            <div
+                                className="h-1.5 rounded-full transition-all"
+                                style={{
+                                    width: `${Math.min(
+                                        ((data?.budget_allocation?.wants?.actual_spent ?? 0) /
+                                        (data?.budget_allocation?.wants?.amount ?? 1)) * 100,
+                                        100
+                                    )}%`,
+                                    backgroundColor:
+                                        (data?.budget_allocation?.wants?.remaining_buffer ?? 0) >= 0
+                                            ? "#a855f7"
+                                            : "#ef4444",
+                                }}
+                            />
+                        </div>
+
+                        <div className="flex justify-between items-center">
+                            <span className="text-xs text-purple-400">
+                                Used: RM {(data?.budget_allocation?.wants?.actual_spent ?? 0).toLocaleString()}
+                            </span>
+                            {(data?.budget_allocation?.wants?.remaining_buffer ?? 0) >= 0 ? (
+                                <span className="text-xs font-medium text-green-600">
+                                    RM {(data?.budget_allocation?.wants?.remaining_buffer ?? 0).toLocaleString()} still free to use ✓
+                                </span>
+                            ) : (
+                                <span className="text-xs font-medium text-red-500">
+                                    ⚠️ RM {Math.abs(data?.budget_allocation?.wants?.remaining_buffer ?? 0).toLocaleString()} over budget
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* SAVINGS */}
+                    <div className="rounded-lg border border-green-100 bg-green-50 p-4">
+                        <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2">
+                                <span className="text-green-500 text-base">💚</span>
+                                <span className="text-sm font-semibold text-green-700">Savings</span>
+                                <span className="bg-green-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                                    {data?.budget_allocation?.savings?.percentage ?? 0}%
+                                </span>
+                            </div>
+                            <span className="text-sm font-bold text-green-700">
+                                RM {(data?.budget_allocation?.savings?.amount ?? 0).toLocaleString()}
+                            </span>
+                        </div>
+                        <p className="text-xs text-green-500 mb-2">
+                            Set aside every month to reach your savings goal on time.
+                        </p>
+
+                        <div className="flex justify-between items-center">
+                            <span className="text-xs text-green-400">
+                                Save RM {(data?.budget_allocation?.savings?.monthly_needed ?? 0).toLocaleString()}/month to hit your goal
+                            </span>
+                            {(data?.budget_allocation?.savings?.amount ?? 0) >=
+                            (data?.budget_allocation?.savings?.monthly_needed ?? 0) ? (
+                                <span className="text-xs font-medium text-green-600">
+                                    ✓ You're saving enough!
+                                </span>
+                            ) : (
+                                <span className="text-xs font-medium text-red-500">
+                                    ⚠️ Need RM {(
+                                        (data?.budget_allocation?.savings?.monthly_needed ?? 0) -
+                                        (data?.budget_allocation?.savings?.amount ?? 0)
+                                    ).toLocaleString()} more/month
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
+            
             {/* Card 3: Recommendations */}
             {data?.ranked_recommendations && data.ranked_recommendations.length > 0 && (
                 <div className="bg-white rounded-xl border border-gray-200 p-6 mb-4">

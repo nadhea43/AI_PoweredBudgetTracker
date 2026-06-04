@@ -1,0 +1,8 @@
+node_modules
+build
+dist
+.apps
+.git
+.gitignore
+README.md
+.DS_Store

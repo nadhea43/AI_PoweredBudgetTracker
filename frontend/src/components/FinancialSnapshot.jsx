@@ -50,7 +50,7 @@ export default function FinancialSnapshot({ data, onContinue }) {
                     <DeductionCard
                         label="EPF (11%)"
                         amount={data?.epf || 0}
-                        description="Your retirement fund — locked until age 55. Employer adds 13% on top."
+                        description="Your retirement fund — locked until age 55."
                         color="red"
                     />
                     <DeductionCard
@@ -148,11 +148,11 @@ export default function FinancialSnapshot({ data, onContinue }) {
                     </div>
                     <div className="flex justify-between py-2 border-b border-gray-100">
                         <span className="text-gray-600">Fixed commitments</span>
-                        <span className="font-medium text-gray-600">RM {totalCommitments.toLocaleString()}</span>
+                        <span className="font-medium text-gray-600">- RM {totalCommitments.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between py-2 border-b border-gray-100">
                         <span className="text-gray-600">Variable spending</span>
-                        <span className="font-medium text-red-600">− RM {(data?.total_spending || 0).toLocaleString()}</span>
+                        <span className="font-medium text-gray-600">− RM {(data?.total_spending || 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between py-2 pt-1">
                         <span className="font-semibold text-gray-800">Remaining</span>
