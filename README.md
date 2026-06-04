@@ -8,6 +8,7 @@ A full-stack financial analysis web application tailored for fresh graduates in 
 
 * **Frontend:** React (Vite), React Router DOM, Axios, Tailwind CSS
 * **Backend:** Python 3 (Native `ThreadingHTTPServer`), Google Gemini API
+* **Containerization:** Docker, Docker Compose
 
 ---
 
@@ -17,25 +18,31 @@ Before setting up the project, ensure you have the following installed on your l
 
 * **Node.js:** v18 or above (comes with `npm`)
 * **Python:** v3.10 or above
+* **Docker & Docker Compose:** Required if running via containers
 
 To check if you already have them installed, run:
 ```bash
 node -v
 npm -v
 python --version
+docker --version
+docker compose version
 ```
 
 ## 📁 Project Structure
 ```
 ├── .env                         # Root environment variables (API keys)
+├── docker-compose.yml           # Multi-container orchestrator layout
 ├── data/
 │   └── hies_state.csv           # HIES benchmark data lookup file
 ├── backend/
+│   ├── Dockerfile               # Backend environment compilation manifest
 │   └── week_2/
 │       └── src/
 │           ├── main.py          # Python backend server logic
 │           └── gemini_client.py # Core Gemini API connector config
 └── frontend/
+    ├── Dockerfile               # Frontend staging build setup
     ├── src/
     │   ├── components/          # Screen UI Modules
     │   │   ├── OnboardingForm.jsx       # Screen 1 — User input form
@@ -72,7 +79,37 @@ VITE_BACKEND_URL=http://localhost:8000
 ## 🏃 How to Run the Application
 To run the full-stack system locally, execute the following startup scripts in two separate terminal windows:
 
-### Terminal 1: Backend Server (Python)
+### Option A: Running with Docker Compose (Recommended)
+Docker Compose automatically spins up the frontend, backend, and volume bindings simultaneously without requiring manual terminal isolation or explicit code rebuilding.
+
+1. Build and start the containers (First-time run or after making system-level dependency changes):
+
+```Bash
+docker compose up --build
+```
+
+2. Subsequent launches (Spins up existing local images instantly without triggering compilation delays):
+
+``` Bash
+docker compose up
+```
+
+3. Run in background mode (Frees up your current terminal window):
+
+```Bash
+docker compose up -d
+```
+4. Tear down the stack:
+
+```Bash
+   docker compose down
+```
+*Once active, the frontend maps to `http://localhost:5173` while routing reverse-proxied traffic directly to the underlying Python server.*
+
+### Option B: Running Natively (Manual Multi-Terminal)
+If running without containerization, execute the following startup scripts in two separate terminal windows:
+
+#### Terminal 1: Backend Server (Python)
 
 1. Navigate to the backend source directory:
 ```Bash
@@ -84,7 +121,7 @@ python main.py
 ```
 The server will spin up and display: `Finance gap detection backend listening on http://localhost:8000`
 
-### Terminal 2: Frontend Client (React + Vite)
+#### Terminal 2: Frontend Client (React + Vite)
 1. Open a new terminal window and navigate to your frontend directory:
 ```Bash
 cd frontend
