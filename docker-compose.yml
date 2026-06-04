@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   backend:
@@ -15,11 +14,14 @@ services:
     command: sh -c "uv run python scripts/etl_pipeline.py && uv run python main.py"
 
   frontend:
+    image: budget-tracker-frontend
     build: ./frontend
     ports:
       - "5173:5173"
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    environment:
+      - CHOKIDAR_USEPOLLING=true
 
 

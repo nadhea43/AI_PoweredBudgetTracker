@@ -452,60 +452,44 @@ def build_plan(snapshot: dict[str, Any], benchmark: dict[str, Any], payload: dic
     """Generates a dynamic financial plan matching the exact property keys of the frontend components."""
     
     # ── STEP 1: Extract base values ────────────────────────────────────────────
-    # Ambik dari snapshot (dah dikira dalam build_snapshot)
     take_home         = snapshot.get('take_home', 0)
     total_commitments = snapshot.get('total_commitments', 0)  # rent + loan + phone
     total_spending    = snapshot.get('total_spending', 0)     # food + transport + entertainment
     remaining         = max(snapshot.get("remaining", 0), 0)  # take_home - commitments - spending
 
-    # Ambik dari payload (user input: savings goal & timeframe)
+    # Fix: Ensure savings_goal defaults gracefully
     goal_amount   = safe_float(payload.get("savings_goal"), 0)
     target_months = int(safe_float(payload.get("goal_months"), 6)) or 6
 
     # ── STEP 2: Goal-driven calculations ───────────────────────────────────────
-    # Berapa user KENA save setiap bulan untuk reach goal dalam timeframe
     monthly_needed   = round(goal_amount / target_months, 2) if goal_amount and target_months else 0
-
-    # Berapa user BOLEH save (actual duit tinggal selepas semua expenses)
     monthly_saveable = remaining
 
     # ── STEP 3: Achievability check ────────────────────────────────────────────
-    # Boleh ke user reach goal dalam timeframe yang ditetapkan?
     total_saveable_in_timeframe = round(monthly_saveable * target_months, 2)
     is_achievable = total_saveable_in_timeframe >= goal_amount if goal_amount > 0 else True
-
-     # Berapa bulan sebenarnya untuk reach goal (ikut current pace)
     actual_months_to_goal = math.ceil(goal_amount / monthly_saveable) if monthly_saveable > 0 and goal_amount > 0 else None
 
     # ── STEP 4: Budget allocation ──────────────────────────────────────────────
-    # Needs = fixed commitments sahaja (rent, loan, phone — non-negotiable)
     actual_needs = round(total_commitments, 2)
     needs_pct    = round(actual_needs / take_home, 4) if take_home else 0
-
-    # Variable spending — already spent by user (food, transport, entertainment)
     actual_wants = round(total_spending, 2)
 
-    # Savings % — driven by goal, floored at 20%, capped at 60%
     raw_savings_pct = monthly_needed / take_home if take_home else 0.20
-    savings_pct     = max(0.20, raw_savings_pct)
-    savings_pct     = min(savings_pct, 0.60)
+    savings_pct     = max(0.20, min(raw_savings_pct, 0.60))
+    wants_pct       = max(round(1 - needs_pct - savings_pct, 4), 0.05)
 
-    # Wants % = remainder after needs and savings (minimum 5%)
-    wants_pct = max(round(1 - needs_pct - savings_pct, 4), 0.05)
-
-    # Adjust savings if wants terlalu ketat
     if wants_pct == 0.05:
         savings_pct = round(1 - needs_pct - 0.05, 4)
 
-    # Final RM amounts
     needs_amount    = actual_needs
-    savings_amount  = min(round(take_home * savings_pct, 2), remaining)  # cap at remaining
+    savings_amount  = min(round(take_home * savings_pct, 2), remaining)
     savings_pct     = round(savings_amount / take_home, 4) if take_home else savings_pct
     wants_amount    = round(take_home - needs_amount - savings_amount, 2)
     wants_pct       = round(wants_amount / take_home, 4) if take_home else wants_pct
-    wants_remaining = round(wants_amount - actual_wants, 2)  # buffer yang masih boleh spent
+    wants_remaining = round(wants_amount - actual_wants, 2)
 
-    # ── STEP 5: Savings projection ─────────────────────────────────────────────  ← WAS MISSING
+    # ── STEP 5: Savings projection ─────────────────────────────────────────────
     savings_projection = [
         {
             "month": f"M{i}",
@@ -516,13 +500,11 @@ def build_plan(snapshot: dict[str, Any], benchmark: dict[str, Any], payload: dic
         for i in range(1, target_months + 1)
     ]
 
-    # ── STEP 6: Goal status ────────────────────────────────────────────────────  ← WAS MISSING
+    # ── STEP 6: Goal status ────────────────────────────────────────────────────
     if goal_amount <= 0:
         goal_status = "Enter a savings goal to see your projection."
-
     elif monthly_saveable <= 0:
         goal_status = "Your cash flow is negative. Reduce expenses before targeting a savings goal."
-
     elif not is_achievable:
         shortfall_total = round(goal_amount - total_saveable_in_timeframe, 2)
         suggested_goal  = round(monthly_saveable * target_months, -2)
@@ -534,14 +516,12 @@ def build_plan(snapshot: dict[str, Any], benchmark: dict[str, Any], payload: dic
             f"Realistic options: extend to {actual_months_to_goal} months, "
             f"or adjust your goal to RM {suggested_goal:,.0f}."
         )
-
     elif actual_months_to_goal <= target_months:
         months_ahead = target_months - actual_months_to_goal
         goal_status = (
             f"You are on track to reach RM {goal_amount:,.0f} in {actual_months_to_goal} months"
             f"{f' — {months_ahead} months ahead of your {target_months}-month target.' if months_ahead > 0 else '.'}"
         )
-
     else:
         shortfall_per_month = round(monthly_needed - monthly_saveable, 2)
         goal_status = (
@@ -550,10 +530,7 @@ def build_plan(snapshot: dict[str, Any], benchmark: dict[str, Any], payload: dic
             f"Save an extra RM {shortfall_per_month:,.2f}/month to hit your target on time."
         )
 
-
-    # ── STEP 7: Gemini prompt — only for subjective intelligence ──────────────
-    # Gemini handle: health score, label, benchmark comparison, recommendations
-    # Python handle: semua nombor (budget, projection, goal status)
+    # ── STEP 7: Gemini prompt for subjective intelligence ──────────────────────
     prompt = f"""
     You are an expert Malaysian financial advisor. Analyze this graduate profile and return a clean JSON dataset.
 
@@ -564,16 +541,13 @@ def build_plan(snapshot: dict[str, Any], benchmark: dict[str, Any], payload: dic
     - Total Variable Spending: RM {total_spending}
     - Remaining Cash: RM {remaining}
     - Savings Goal: RM {goal_amount} in {target_months} months
-    - Required Monthly Saving: RM {monthly_needed}
-    - Current Monthly Saveable: RM {monthly_saveable}
-    - Goal Achievable: {"Yes" if is_achievable else "No"}
 
     Tasks:
-    1. Calculate a financial health score out of 100 based on commitments vs take-home pay.
-    2. Generate exactly 3 personalised ranked recommendations to help user reach their goal.
-       For 'difficulty' choose ONLY from: 'Easy', 'Medium', 'Hard'.
+    1. Write a 2-3 sentence conversational 'summary' speaking directly to the user about their financial health. No code, no brackets, just clean text.
+    2. Calculate a financial health score out of 100 based on commitments vs take-home pay.
+    3. Generate exactly 3 personalised ranked recommendations to help user reach their goal.
 
-    Return ONLY this JSON structure, nothing else, no markdown:
+    Return ONLY a valid JSON object matching this schema. Do not output markdown backticks:
     {{
         "financial_health_score": 75,
         "health_label": "Healthy Buffer",
@@ -581,34 +555,39 @@ def build_plan(snapshot: dict[str, Any], benchmark: dict[str, Any], payload: dic
         "ranked_recommendations": [
             {{
                 "rank": 1,
-                "action": "action text here",
+                "action": "Switch to a monthly public transport pass",
                 "difficulty": "Easy",
                 "monthly_impact": 150,
-                "reasoning": "reasoning text here"
+                "reasoning": "Using the My50 unlimited travel pass in Klang Valley will immediately slash transit costs."
             }},
             {{
                 "rank": 2,
-                "action": "action text here",
+                "action": "Cook mid-week meals at home",
                 "difficulty": "Medium",
-                "monthly_impact": 100,
-                "reasoning": "reasoning text here"
+                "monthly_impact": 200,
+                "reasoning": "Food spending is high. Small meal prep shifts can free up cash quickly."
             }},
-             {{
+            {{
                 "rank": 3,
-                "action": "action text here",
-                "difficulty": "hard",
-                "monthly_impact": 150,
-                "reasoning": "reasoning text here"
+                "action": "Consolidate subscription channels",
+                "difficulty": "Hard",
+                "monthly_impact": 80,
+                "reasoning": "Reducing unnecessary memberships balances structural overhead streams."
             }}
         ]
     }}
     """
 
     try:
+        # Request live text response
         ai_response = generate_text(prompt, max_tokens=1200, temperature=0.2)
-        plan_data = json.loads(ai_response.strip())
+        
+        # Defensive Parsing: Strip markdown blocks if Gemini added them mistakenly
+        # Strip markdown code block wrappers if Gemini accidentally includes them
+        cleaned_json = ai_response.strip().replace("```json", "").replace("```", "")
+        plan_data = json.loads(cleaned_json)
 
-        # ── STEP 8: Inject all Python-calculated fields (override Gemini) ──────
+        # ── STEP 8: Inject all Python-calculated fields (override Gemini values safely) ──────
         plan_data["budget_allocation"] = {
             "needs": {
                 "percentage": int(round(needs_pct * 100)),
@@ -617,13 +596,13 @@ def build_plan(snapshot: dict[str, Any], benchmark: dict[str, Any], payload: dic
             "wants": {
                 "percentage": int(round(wants_pct * 100)),
                 "amount": wants_amount,
-                "actual_spent": actual_wants,         # ← food + transport + entertainment
-                "remaining_buffer": wants_remaining,  # ← wants_amount - actual_wants
+                "actual_spent": actual_wants,
+                "remaining_buffer": wants_remaining,
             },
             "savings": {
                 "percentage": int(round(savings_pct * 100)),
                 "amount": savings_amount,
-                "monthly_needed": monthly_needed,     # ← goal / target_months
+                "monthly_needed": monthly_needed,
             }
         }
         plan_data["savings_projection"]    = savings_projection
@@ -639,7 +618,7 @@ def build_plan(snapshot: dict[str, Any], benchmark: dict[str, Any], payload: dic
     except Exception as e:
         print(f"ERROR PARSING GEMINI PLAN: {e}")
 
-        # ── STEP 9: Full fallback — app still works without Gemini ────────────
+        # ── STEP 9: Safe, consistent fallback structure
         return {
             "financial_health_score": 60,
             "health_label": "Calculated Baseline",
@@ -653,7 +632,6 @@ def build_plan(snapshot: dict[str, Any], benchmark: dict[str, Any], payload: dic
                     "reasoning": "Paying yourself first ensures savings happen before discretionary spending."
                 }
             ],
-            # Same Python-calculated fields — consistent even in fallback
             "budget_allocation": {
                 "needs":   {"percentage": int(round(needs_pct * 100)),   "amount": needs_amount},
                 "wants":   {"percentage": int(round(wants_pct * 100)),   "amount": wants_amount},

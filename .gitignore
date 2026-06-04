@@ -6,4 +6,5 @@ scripts/__pycache__
 .ruff_cache/
 backend/week_2/jobs_d1.db
 backend/week_2/rate_limits.txt
-backend/week_2/__pycache__/
+backend/week_2/__pycache__
+backend/week_2/uv.lock

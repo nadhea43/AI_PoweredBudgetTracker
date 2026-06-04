@@ -26,9 +26,18 @@ function FormScreen() {
     setError(null)
 
     try {
-      const { snapshot, plan } = await generateFinancialAnalysis(formData)
-      setSnapshotData(snapshot)
-      setAiResult(plan)
+      const responseData = await generateFinancialAnalysis(formData)
+      
+      // If your backend serves a split { snapshot, plan } payload:
+      if (responseData.snapshot || responseData.plan) {
+        setSnapshotData(responseData.snapshot || null)
+        setAiResult(responseData.plan || null)
+      } else {
+        // If your backend serves a unified flat dictionary (our Step 7/8 setup):
+        setSnapshotData(responseData) 
+        setAiResult(responseData)
+      }
+
       navigate('/snapshot')  // → /snapshot
 
     } catch (err) {

@@ -9,8 +9,12 @@ import json
 from typing import Optional
 
 import requests
+# 1. ADD THIS IMPORT
+from dotenv import load_dotenv 
 
-# FIXED: Updated from v1beta2/models/...:generateText to v1beta/models/...:generateContent
+# 2. CALL IT IMMEDIATELY HERE TO LOAD YOUR .ENV FILE
+load_dotenv() 
+
 API_URL_TEMPLATE = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 

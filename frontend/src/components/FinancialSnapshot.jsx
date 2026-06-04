@@ -131,7 +131,19 @@ export default function FinancialSnapshot({ data, onContinue }) {
                             <span>Gemini Financial AI Insights</span>
                         </div>
                         <p className="text-gray-600 text-sm leading-relaxed bg-indigo-50/40 p-3 rounded-lg border border-indigo-100/50">
-                            {aiSummary}
+                            {(() => {
+                                // Check if the summary string accidentally starts with a JSON bracket
+                                if (typeof aiSummary === 'string' && aiSummary.trim().startsWith('{')) {
+                                    try {
+                                        const parsed = JSON.parse(aiSummary);
+                                        return parsed.summary || aiSummary;
+                                    } catch (e) {
+                                        return aiSummary;
+                                    }
+                                }
+                                // If it's already a clean plain text sentence, just print it directly
+                                return aiSummary;
+                            })()}
                         </p>
                     </div>
                 )}
