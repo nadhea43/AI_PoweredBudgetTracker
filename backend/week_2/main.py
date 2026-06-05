@@ -605,6 +605,7 @@ def build_plan(snapshot: dict[str, Any], benchmark: dict[str, Any], payload: dic
                 "monthly_needed": monthly_needed,
             }
         }
+        plan_data["target_months"]         = target_months
         plan_data["savings_projection"]    = savings_projection
         plan_data["goal_status"]           = goal_status
         plan_data["goal_amount"]           = goal_amount

@@ -72,6 +72,44 @@ export default function AIPlan({ data, onContinue }) {
                         </p>
                     </div>
 
+                     {/* SAVINGS */}
+                    <div className="rounded-lg border border-green-100 bg-green-50 p-4">
+                        <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2">
+                                <span className="text-green-500 text-base">💚</span>
+                                <span className="text-sm font-semibold text-green-700">Savings</span>
+                                <span className="bg-green-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                                    {data?.budget_allocation?.savings?.percentage ?? 0}%
+                                </span>
+                            </div>
+                            <span className="text-sm font-bold text-green-700">
+                                RM {(data?.budget_allocation?.savings?.amount ?? 0).toLocaleString()}
+                            </span>
+                        </div>
+                        <p className="text-xs text-green-500 mb-2">
+                            Set aside every month to reach your savings goal on time.
+                        </p>
+
+                        <div className="flex justify-between items-center">
+                            <span className="text-xs text-green-400">
+                                Save RM {(data?.budget_allocation?.savings?.monthly_needed ?? 0).toLocaleString()}/month to hit your goal
+                            </span>
+                            {(data?.budget_allocation?.savings?.amount ?? 0) >=
+                            (data?.budget_allocation?.savings?.monthly_needed ?? 0) ? (
+                                <span className="text-xs font-medium text-green-600">
+                                    ✓ You're saving enough!
+                                </span>
+                            ) : (
+                                <span className="text-xs font-medium text-red-500">
+                                    ⚠️ Need RM {(
+                                        (data?.budget_allocation?.savings?.monthly_needed ?? 0) -
+                                        (data?.budget_allocation?.savings?.amount ?? 0)
+                                    ).toLocaleString()} more/month
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
                     {/* WANTS */}
                     <div className="rounded-lg border border-purple-100 bg-purple-50 p-4">
                         <div className="flex items-center justify-between mb-1">
@@ -124,44 +162,6 @@ export default function AIPlan({ data, onContinue }) {
                         </div>
                     </div>
 
-                    {/* SAVINGS */}
-                    <div className="rounded-lg border border-green-100 bg-green-50 p-4">
-                        <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-2">
-                                <span className="text-green-500 text-base">💚</span>
-                                <span className="text-sm font-semibold text-green-700">Savings</span>
-                                <span className="bg-green-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                                    {data?.budget_allocation?.savings?.percentage ?? 0}%
-                                </span>
-                            </div>
-                            <span className="text-sm font-bold text-green-700">
-                                RM {(data?.budget_allocation?.savings?.amount ?? 0).toLocaleString()}
-                            </span>
-                        </div>
-                        <p className="text-xs text-green-500 mb-2">
-                            Set aside every month to reach your savings goal on time.
-                        </p>
-
-                        <div className="flex justify-between items-center">
-                            <span className="text-xs text-green-400">
-                                Save RM {(data?.budget_allocation?.savings?.monthly_needed ?? 0).toLocaleString()}/month to hit your goal
-                            </span>
-                            {(data?.budget_allocation?.savings?.amount ?? 0) >=
-                            (data?.budget_allocation?.savings?.monthly_needed ?? 0) ? (
-                                <span className="text-xs font-medium text-green-600">
-                                    ✓ You're saving enough!
-                                </span>
-                            ) : (
-                                <span className="text-xs font-medium text-red-500">
-                                    ⚠️ Need RM {(
-                                        (data?.budget_allocation?.savings?.monthly_needed ?? 0) -
-                                        (data?.budget_allocation?.savings?.amount ?? 0)
-                                    ).toLocaleString()} more/month
-                                </span>
-                            )}
-                        </div>
-                    </div>
-
                 </div>
             </div>
 
@@ -186,6 +186,7 @@ export default function AIPlan({ data, onContinue }) {
                     <SavingsChart 
                         data={data.savings_projection} 
                         goalAmount={data?.goal_amount || 5000} // or wherever you track the user's specific target goal
+                        targetMonths={data?.target_months || 10}
                     />
                 </div>
             )}
