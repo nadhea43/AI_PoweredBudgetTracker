@@ -1,7 +1,7 @@
 import { useState } from "react"
 import DeductionCard from "./DeductionCard"
 
-// ── Spending type config ─────────────────────────────────────
+// ── Spending type config ─────────────────────────────────────────────────────
 const SPENDING_TYPE_CONFIG = {
   "Lifestyle Spender":  { bg: "bg-orange-50",  border: "border-orange-200", text: "text-orange-700", dot: "bg-orange-400" },
   "Committed Spender":  { bg: "bg-blue-50",    border: "border-blue-200",   text: "text-blue-700",   dot: "bg-blue-400"   },
@@ -9,37 +9,57 @@ const SPENDING_TYPE_CONFIG = {
   "Balanced":           { bg: "bg-green-50",   border: "border-green-200",  text: "text-green-700",  dot: "bg-green-400"  },
   "Under-earner":       { bg: "bg-yellow-50",  border: "border-yellow-200", text: "text-yellow-700", dot: "bg-yellow-400" },
 }
-
 const DEFAULT_TYPE_STYLE = { bg: "bg-gray-50", border: "border-gray-200", text: "text-gray-700", dot: "bg-gray-400" }
 
+// ── Helper: progress bar width, capped at 100% ───────────────────────────────
+function barWidth(value, max) {
+  if (!max || max <= 0) return "0%"
+  return `${Math.min((value / max) * 100, 100)}%`
+}
+
 export default function FinancialSnapshot({ data, onContinue }) {
-  const [raiseExpanded, setRaiseExpanded] = useState(false)
-  const [copied, setCopied]               = useState(false)
+  const [copied, setCopied] = useState(false)
 
-  // ── Extract values ───────────────────────────────────────────
-  const grossSalary      = data?.gross_salary       || 0
-  const takeHome         = data?.take_home          || 0
-  const totalCommitments = data?.total_commitments  || 0
-  const totalSpending    = data?.total_spending     || 0
-  const remaining        = data?.remaining          || 0
-  const medianIncome     = data?.benchmark?.avg_income_median || data?.benchmark?.median_income || 1
-  const stateName        = data?.state              || "your state"
-  const aiSummary        = data?.summary            || ""
-  const spendingType     = data?.spending_type      || ""
-  const anomalies        = data?.anomalies          || []
-  const billSavings      = data?.bill_savings       || []
-  const raiseScript      = data?.raise_script       || ""
+  // ── Extract values ───────────────────────────────────────────────────────
+  const grossSalary      = data?.gross_salary      || 0
+  const takeHome         = data?.take_home         || 0
+  const totalCommitments = data?.total_commitments || 0
+  const totalSpending    = data?.total_spending    || 0
+  const remaining        = data?.remaining         || 0
+  const stateName        = data?.state             || "your state"
+  const aiSummary        = data?.summary           || ""
+  const spendingType     = data?.spending_type     || ""
+  const anomalies        = data?.anomalies         || []
+  const billSavings      = data?.bill_savings      || []
+  const raiseScript      = data?.raise_script      || ""
 
-  const typeStyle   = SPENDING_TYPE_CONFIG[spendingType] || DEFAULT_TYPE_STYLE
-  const belowMedian = grossSalary < medianIncome
-  const diffPercent = medianIncome > 1
-    ? Math.abs(Math.round(((grossSalary - medianIncome) / medianIncome) * 100))
+  // ── Benchmark values ─────────────────────────────────────────────────────
+  // PRIMARY  → formal wages median by age group (individual worker, apples-to-apples)
+  // SECONDARY → HIES state median (household level, context only)
+  const ageGroupMedian = data?.benchmark?.age_group_median_wage || 0
+  const ageGroupLabel  = data?.benchmark?.age_group_label       || "your age group"
+  const stateMedian    = data?.benchmark?.state_median_income || 0
+
+  // Use age group as primary; fall back to state if age group unavailable
+  const primaryMedian  = ageGroupMedian || stateMedian || 1
+  const hasAgeMedian   = ageGroupMedian > 0
+  const hasStateMedian = stateMedian > 0
+
+  // ── Derived comparisons ──────────────────────────────────────────────────
+  const belowPrimary    = grossSalary < primaryMedian
+  const diffPercent     = primaryMedian > 1
+    ? Math.abs(Math.round(((grossSalary - primaryMedian) / primaryMedian) * 100))
     : 0
+
+  // Bar scale: use the larger of the two medians so both bars are meaningful
+  const barMax = Math.max(grossSalary, ageGroupMedian, stateMedian) * 1.05 || 1
 
   const commitmentRatio  = takeHome > 0 ? Math.round((totalCommitments / takeHome) * 100) : 0
   const isHighCommitment = commitmentRatio > 45
 
   const totalAnnualBillSavings = billSavings.reduce((sum, b) => sum + (b.annual_saving || 0), 0)
+
+  const typeStyle = SPENDING_TYPE_CONFIG[spendingType] || DEFAULT_TYPE_STYLE
 
   const handleCopyScript = () => {
     if (!raiseScript) return
@@ -49,10 +69,27 @@ export default function FinancialSnapshot({ data, onContinue }) {
     })
   }
 
+  // ── Comparison message ───────────────────────────────────────────────────
+  const comparisonMessage = () => {
+    if (hasAgeMedian) {
+      return belowPrimary
+        ? `Your salary is ${diffPercent}% below the median for workers aged ${ageGroupLabel}. ${
+            hasStateMedian
+              ? `The ${stateName} state figure (RM ${stateMedian.toLocaleString()}) reflects household income across all ages and experience levels — a less fair comparison for someone early in their career.`
+              : ""
+          }`
+        : `You're ${diffPercent}% above the median for workers aged ${ageGroupLabel}. Strong start!`
+    }
+    // Fallback: only state median available
+    return belowPrimary
+      ? `Your salary is ${diffPercent}% below the ${stateName} median. This figure covers all working adults of all experience levels.`
+      : `Your salary is ${diffPercent}% above the ${stateName} median. Great start!`
+  }
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
 
-      {/* Header */}
+      {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="mb-6 text-center">
         <h1 className="text-2xl font-bold text-gray-900">
           Hi {data?.name || "there"}, here's your payslip breakdown
@@ -62,19 +99,22 @@ export default function FinancialSnapshot({ data, onContinue }) {
         </p>
       </div>
 
-      {/* Card 1: Deduction breakdown */}
+      {/* ── Card 1: Deduction breakdown ─────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 mb-4">
         <h2 className="font-semibold text-gray-800 mb-4">What gets deducted from your salary</h2>
+
         <div className="flex justify-between items-center mb-3 pb-3 border-b border-gray-100">
           <span className="text-sm text-gray-600">Gross Salary</span>
           <span className="font-bold text-lg text-gray-900">RM {grossSalary.toLocaleString()}</span>
         </div>
+
         <div className="space-y-2 mb-4">
-          <DeductionCard label="EPF (11%)"      amount={data?.epf   || 0} description="Your retirement fund — locked until age 55."                      color="red" />
-          <DeductionCard label="SOCSO"           amount={data?.socso || 0} description="Social insurance if you're injured at work or become disabled."   color="red" />
-          <DeductionCard label="EIS (0.2%)"      amount={data?.eis   || 0} description="Pays you a portion of salary if you get retrenched."             color="red" />
-          <DeductionCard label="PCB / Income Tax" amount={data?.pcb  || 0} description="Monthly income tax deducted in advance by your employer."        color="red" />
+          <DeductionCard label="EPF (11%)"       amount={data?.epf   || 0} description="Your retirement fund — locked until age 55."                     color="red" />
+          <DeductionCard label="SOCSO"            amount={data?.socso || 0} description="Social insurance if you're injured at work or become disabled."  color="red" />
+          <DeductionCard label="EIS (0.2%)"       amount={data?.eis   || 0} description="Pays you a portion of salary if you get retrenched."            color="red" />
+          <DeductionCard label="PCB / Income Tax" amount={data?.pcb   || 0} description="Monthly income tax deducted in advance by your employer."       color="red" />
         </div>
+
         <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-3 flex justify-between items-center">
           <div>
             <p className="font-semibold text-green-800">Take-Home Pay</p>
@@ -84,9 +124,11 @@ export default function FinancialSnapshot({ data, onContinue }) {
         </div>
       </div>
 
-      {/* Card 2: State comparison + spending type + AI summary */}
+      {/* ── Card 2: Salary comparison ───────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 mb-4">
-        <h2 className="font-semibold text-gray-800 mb-4">How you compare to the average person in {stateName}</h2>
+        <h2 className="font-semibold text-gray-800 mb-4">
+          How you compare to workers in {stateName}
+        </h2>
 
         {/* Spending type badge */}
         {spendingType && (
@@ -97,31 +139,79 @@ export default function FinancialSnapshot({ data, onContinue }) {
         )}
 
         {/* Salary bars */}
-        <div className="space-y-3 mb-4">
+        <div className="space-y-4 mb-4">
+
+          {/* Your salary */}
           <div>
-            <div className="flex justify-between text-sm text-gray-600 mb-1">
-              <span>Your Salary</span>
-              <span className="font-medium">RM {grossSalary.toLocaleString()}</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-3">
-              <div className="bg-blue-500 h-3 rounded-full" style={{ width: `${Math.min((grossSalary / medianIncome) * 100, 100)}%` }} />
-            </div>
-          </div>
-          <div>
-            <div className="flex justify-between text-sm text-gray-600 mb-1">
-              <span>{stateName} median income</span>
-              <span className="font-medium">RM {medianIncome.toLocaleString()}</span>
+            <div className="flex justify-between text-sm text-gray-600 mb-1.5">
+              <span className="font-medium text-gray-800">Your Salary</span>
+              <span className="font-semibold text-gray-900">RM {grossSalary.toLocaleString()}</span>
             </div>
             <div className="w-full bg-gray-100 rounded-full h-3">
-              <div className="bg-gray-400 h-3 rounded-full w-full" />
+              <div
+                className="bg-blue-500 h-3 rounded-full transition-all duration-500"
+                style={{ width: barWidth(grossSalary, barMax) }}
+              />
             </div>
           </div>
+
+          {/* Age group median (PRIMARY) */}
+          {hasAgeMedian && (
+            <div>
+              <div className="flex justify-between text-sm mb-1.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-gray-700">Age group median</span>
+                  <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">
+                    {ageGroupLabel} · formal sector
+                  </span>
+                </div>
+                <span className="font-medium text-gray-700">RM {ageGroupMedian.toLocaleString()}</span>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-3">
+                <div
+                  className="bg-blue-300 h-3 rounded-full"
+                  style={{ width: barWidth(ageGroupMedian, barMax) }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* State median (CONTEXT) */}
+          {hasStateMedian && (
+            <div>
+              <div className="flex justify-between text-sm mb-1.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-gray-500">{stateName} state median</span>
+                  <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">
+                    all ages · formal sector
+                  </span>
+                </div>
+                <span className="font-medium text-gray-500">RM {stateMedian.toLocaleString()}</span>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-3">
+                <div
+                  className="bg-gray-300 h-3 rounded-full"
+                  style={{ width: barWidth(stateMedian, barMax) }}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className={`p-3 rounded-lg text-sm ${belowMedian ? "bg-yellow-50 text-yellow-800" : "bg-green-50 text-green-800"}`}>
-          {belowMedian
-            ? `Your salary is ${diffPercent}% below the ${stateName} median. This is completely normal for a fresh graduate — median includes all working adults of all experience levels.`
-            : `Your salary is ${diffPercent}% above the ${stateName} median. Great start!`}
+        {/* Legend */}
+        {hasAgeMedian && hasStateMedian && (
+          <div className="flex items-center gap-4 text-xs text-gray-400 mb-4">
+            <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-blue-500 inline-block" /> Your salary</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-blue-300 inline-block" /> Age group median</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-gray-300 inline-block" /> State median</span>
+          </div>
+        )}
+
+        {/* Verdict message */}
+        <div className={`p-3 rounded-lg text-sm leading-relaxed ${
+          belowPrimary ? "bg-yellow-50 text-yellow-800" : "bg-green-50 text-green-800"
+        }`}>
+          {comparisonMessage()}
         </div>
 
         {/* Gemini summary */}
@@ -142,7 +232,7 @@ export default function FinancialSnapshot({ data, onContinue }) {
         )}
       </div>
 
-      {/* Card 3: Money this month + anomaly highlights */}
+      {/* ── Card 3: Money this month ─────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 mb-4">
         <h2 className="font-semibold text-gray-800 mb-4">Your Money This Month</h2>
 
@@ -153,15 +243,17 @@ export default function FinancialSnapshot({ data, onContinue }) {
           </div>
           <div className="flex justify-between py-2 border-b border-gray-100">
             <span className="text-gray-600">Fixed commitments</span>
-            <span className="font-medium text-gray-600">- RM {totalCommitments.toLocaleString()}</span>
+            <span className="font-medium text-gray-600">− RM {totalCommitments.toLocaleString()}</span>
           </div>
           <div className="flex justify-between py-2 border-b border-gray-100">
             <span className="text-gray-600">Variable spending</span>
-            <span className="font-medium text-gray-600">- RM {totalSpending.toLocaleString()}</span>
+            <span className="font-medium text-gray-600">− RM {totalSpending.toLocaleString()}</span>
           </div>
           <div className="flex justify-between py-2 pt-1">
             <span className="font-semibold text-gray-800">Remaining</span>
-            <span className="font-bold text-lg text-gray-900">RM {remaining.toLocaleString()}</span>
+            <span className={`font-bold text-lg ${remaining < 0 ? "text-red-600" : "text-gray-900"}`}>
+              RM {remaining.toLocaleString()}
+            </span>
           </div>
         </div>
 
@@ -171,7 +263,7 @@ export default function FinancialSnapshot({ data, onContinue }) {
           </div>
         )}
 
-        {/* Anomaly section — DOSM 25-34 age group comparison */}
+        {/* Anomalies — DOSM age group spending comparison */}
         {anomalies.length > 0 && (
           <div className="mt-4 pt-4 border-t border-gray-100">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
@@ -186,7 +278,9 @@ export default function FinancialSnapshot({ data, onContinue }) {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-orange-700">RM {a.your_amount?.toLocaleString()}</span>
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${a.severity === "high" ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700"}`}>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                      a.severity === "high" ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700"
+                    }`}>
                       +{a.pct_over}%
                     </span>
                   </div>
@@ -197,16 +291,15 @@ export default function FinancialSnapshot({ data, onContinue }) {
         )}
       </div>
 
-      
-      {/* Card 5: Bill audit — only if savings found */}
+      {/* ── Card 4: Bill audit ───────────────────────────────────────────── */}
       {billSavings.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-6 mb-4">
           <div className="flex items-start justify-between mb-3">
             <div>
               <h2 className="font-semibold text-gray-800">Bill Audit</h2>
-              <p className="text-xs text-gray-400 mt-0.5">Cheaper alternatives found for your bills</p>
+              <p className="text-xs text-gray-400 mt-0.5">Alternatives plan found for your bills to save more</p>
             </div>
-            <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">AI #7</span>
+            <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">AI</span>
           </div>
 
           <div className="space-y-3">
@@ -232,13 +325,35 @@ export default function FinancialSnapshot({ data, onContinue }) {
         </div>
       )}
 
-      {/* Continue button */}
+      {/* ── Raise script ─────────────────────────────────────────────────── */}
+      {raiseScript && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <h2 className="font-semibold text-gray-800">Salary Negotiation Script</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Ready to use in your next review</p>
+            </div>
+            <button
+              onClick={handleCopyScript}
+              className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg font-medium transition-colors"
+            >
+              {copied ? "Copied ✓" : "Copy"}
+            </button>
+          </div>
+          <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 p-3 rounded-lg">
+            {raiseScript}
+          </p>
+        </div>
+      )}
+
+      {/* ── Continue button ──────────────────────────────────────────────── */}
       <button
         onClick={onContinue}
         className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors"
       >
         See My AI Financial Plan →
       </button>
+
     </div>
   )
 }

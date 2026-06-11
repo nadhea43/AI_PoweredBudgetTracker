@@ -102,10 +102,7 @@ export default function AIPlan({ data, onContinue }) {
             <p className={`text-5xl font-bold ${scoreColor}`}>{healthScore}</p>
             <p className={`text-sm font-medium mt-1 ${scoreColor}`}>{data?.health_label || "Analyzed"}</p>
           </div>
-          <div className="text-right text-sm text-gray-500">
-            <p>out of 100</p>
-            <p className="mt-1 text-xs max-w-32">{data?.benchmark_comparison || ""}</p>
-          </div>
+          
         </div>
       </div>
 

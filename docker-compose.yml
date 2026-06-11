@@ -11,7 +11,7 @@ services:
       - ./data:/app/data
       - ./scripts:/app/scripts
     # This chain forces the ETL script to run successfully before starting main.py
-    command: sh -c "uv run python scripts/etl_pipeline.py && uv run python scripts/etl_expenditure.py && uv run python main.py"
+    command: sh -c "uv run python scripts/etl_pipeline.py && uv run python scripts/etl_expenditure.py && uv run python scripts/etl_formal_wages.py && uv run python main.py"
 
   frontend:
     image: budget-tracker-frontend

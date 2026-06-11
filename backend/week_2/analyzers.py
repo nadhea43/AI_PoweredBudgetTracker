@@ -5,6 +5,7 @@ from functools import lru_cache
 from typing import Any
 from constants import SUMMARY_PATH, EXPENDITURE_AGE_PATH, CATEGORY_TO_BENCHMARK
 from utils import safe_float, round_currency, normalize_state_name
+from constants import FORMAL_WAGES_PATH
 
 @lru_cache(maxsize=1)
 def load_summary() -> dict[str, Any]:
@@ -19,6 +20,26 @@ def load_expenditure_benchmarks() -> dict[str, Any]:
         return {}
     with EXPENDITURE_AGE_PATH.open(encoding="utf-8") as handle:
         return json.load(handle)
+    
+@lru_cache(maxsize=1)
+def load_formal_wages() -> dict:
+    with FORMAL_WAGES_PATH.open(encoding="utf-8") as f:
+        return json.load(f)
+
+def get_wage_benchmark_by_age(age_group: str) -> int:
+    """e.g. age_group = '25-29' → 2800"""
+    data = load_formal_wages()
+    entry = data["by_age_group"].get(age_group, {})
+    return entry.get("median_wage", 0)
+
+def get_wage_benchmark_by_state(state: str) -> int:
+    """Fallback — covers all ages, use for context only"""
+    data = load_formal_wages()
+    normalized = normalize_state_name(state).lower()
+    for name, entry in data["by_state"].items():
+        if entry["normalized"] == normalized:
+            return entry["median_wage"]
+    return 0
 
 def get_age_benchmark(age_group: str = "25_34") -> dict[str, float]:
     return load_expenditure_benchmarks().get("benchmarks", {}).get(age_group, {})
@@ -97,7 +118,7 @@ def build_risk_flags(take_home: float, commitments: float, spending: float, rema
 
 def build_finance_gaps(snapshot: dict[str, Any], benchmark: dict[str, Any], plan: dict[str, Any]) -> list[dict[str, Any]]:
     take_home          = snapshot["take_home"]
-    median_income      = safe_float(benchmark.get("avg_income_median"), 0.0)
+    median_income      = safe_float(snapshot.get("benchmark", {}).get("median_income")) or safe_float(benchmark.get("avg_income_median"), 0.0)
     benchmark_spending = safe_float(benchmark.get("avg_expenditure_mean"), 0.0)
     savings_goal       = safe_float(snapshot.get("savings_goal"), 0.0)
     target_months      = int(safe_float(snapshot.get("goal_months"), 12)) or 12

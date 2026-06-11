@@ -10,6 +10,7 @@ except IndexError:
 DATA_DIR = PROJECT_ROOT / "data" / "processed"
 SUMMARY_PATH = DATA_DIR / "hies_state_summary.json"
 EXPENDITURE_AGE_PATH = DATA_DIR / "expenditure_by_age.json"
+FORMAL_WAGES_PATH = DATA_DIR / "formal_wages_benchmark.json"
 
 STATE_ALIASES = {
     "penang":           "Pulau Pinang",

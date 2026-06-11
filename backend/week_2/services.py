@@ -6,7 +6,7 @@ import math
 from typing import Any
 from gemini_client import generate_text
 from utils import safe_float, round_currency, normalize_state_name, sum_dynamic_list, clamp
-from analyzers import get_state_benchmark, estimate_deductions, detect_anomalies, build_risk_flags, get_age_benchmark, build_finance_gaps
+from analyzers import get_state_benchmark, estimate_deductions, detect_anomalies, build_risk_flags, get_age_benchmark, build_finance_gaps, get_wage_benchmark_by_age, get_wage_benchmark_by_state
 
 def health_score_python(snapshot: dict[str, Any], benchmark: dict[str, Any]) -> tuple[int, str]:
     take_home = snapshot["take_home"]
@@ -16,7 +16,7 @@ def health_score_python(snapshot: dict[str, Any], benchmark: dict[str, Any]) -> 
     remaining_ratio  = snapshot["remaining"] / take_home
     commitment_ratio = snapshot["total_commitments"] / take_home
     spending_ratio   = snapshot["total_spending"] / take_home
-    benchmark_gap    = snapshot["gross_salary"] - safe_float(benchmark.get("avg_income_median"), 0.0)
+    benchmark_gap    = snapshot["gross_salary"] - safe_float(snapshot.get("benchmark", {}).get("median_income"), 0.0)
 
     score = 55
     score += remaining_ratio * 45
@@ -55,7 +55,14 @@ def build_snapshot(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, A
     )
 
     remaining    = round_currency(deductions["take_home"] - commitments - spending)
-    median_income = safe_float(benchmark.get("avg_income_median"), 0.0)
+    #median_income = safe_float(benchmark.get("avg_income_median"), 0.0)
+    age_group     = payload.get("age_group", "25-29")
+    median_income = get_wage_benchmark_by_age(age_group) or \
+                safe_float(benchmark.get("avg_income_median"), 0.0)
+    
+    benchmark["age_group_median_wage"] = median_income
+    benchmark["age_group_label"]       = age_group
+    
     diff_from_median = gross_salary - median_income
     diff_percent = round(abs(diff_from_median / median_income) * 100) if median_income else 0
 
@@ -117,9 +124,12 @@ def build_snapshot(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, A
         "anomalies":         anomalies,
         "bill_context_lines":bill_context_lines,
         "benchmark": {
-            "median_income":    median_income,
-            "mean_expenditure": safe_float(benchmark.get("avg_expenditure_mean"), 0.0),
-            "poverty_rate":     safe_float(benchmark.get("avg_poverty"), 0.0),
+            "median_income":         median_income,
+            "age_group_median_wage": median_income,
+            "age_group_label":       age_group,
+            "state_median_income":   get_wage_benchmark_by_state(state),
+            "mean_expenditure":      safe_float(benchmark.get("avg_expenditure_mean"), 0.0),
+            "poverty_rate":          safe_float(benchmark.get("avg_poverty"), 0.0),
         },
         "benchmark_comparison": (
             f"Your salary is {diff_percent}% above the {state} median income."
@@ -202,8 +212,13 @@ def build_plan(snapshot: dict[str, Any], benchmark: dict[str, Any], payload: dic
     utilities_benchmark = benchmark_25_34.get("housing_utilities", 1201.69)
     anomaly_lines = "\n".join(f"  - {a['category']}: RM {a['your_amount']} vs DOSM 25-34 benchmark RM {a['benchmark']} ({a['flag']})" for a in snapshot.get("anomalies", [])) or "  - none detected"
     bill_context_lines = snapshot.get("bill_context_lines", "  - none declared")
-    median_income = safe_float(benchmark.get("avg_income_median"), 0.0)
-    salary_gap    = round(max(median_income - snapshot["gross_salary"], 0), 2)
+    age_group_median = safe_float(snapshot.get("benchmark", {}).get("age_group_median_wage"), 0.0)
+    state_median     = safe_float(snapshot.get("benchmark", {}).get("state_median_income"), 0.0)
+    gross_salary     = snapshot["gross_salary"]
+    age_gap_amount   = round(abs(gross_salary - age_group_median), 2)
+    age_gap_label    = "above" if gross_salary >= age_group_median else "below"
+    state_gap_amount = round(abs(gross_salary - state_median), 2)
+    state_gap_label  = "above" if gross_salary >= state_median else "below"
 
     prompt = f"""You are a Malaysian financial advisor specialising in fresh graduates.
 Analyse the following profile and return ONLY a valid JSON object — no markdown, no backticks.
@@ -211,10 +226,12 @@ Analyse the following profile and return ONLY a valid JSON object — no markdow
 === USER PROFILE ===
 Name: {snapshot.get('name')}
 State: {snapshot.get('state')}
-Gross salary: RM {snapshot.get('gross_salary')}
+Gross salary: RM {gross_salary}
 Take-home pay: RM {take_home}
-State median income: RM {median_income}
-Salary gap vs median: RM {salary_gap} below median
+Age group median wage (formal sector, {snapshot.get("benchmark", {}).get("age_group_label", "your age group")}): RM {age_group_median}
+State median wage ({snapshot.get('state')} formal sector, all ages): RM {state_median}
+Salary vs age group median: RM {age_gap_amount} {age_gap_label} median
+Salary vs state median: RM {state_gap_amount} {state_gap_label} median
 
 Fixed commitments:
 {commitment_lines}
@@ -261,7 +278,7 @@ Phone/WiFi/bill items declared by user:
   "summary": "Direct 2-3 sentence message...",
   "financial_health_score": 62,
   "health_label": "Needs Attention",
-  "benchmark_comparison": "Slightly below regional average",
+  "benchmark_comparison": "Above age group median, above state median",
   "ranked_recommendations": [
     {{ "rank": 1, "action": "...", "difficulty": "Easy", "monthly_impact": 150, "reasoning": "..." }}
   ],

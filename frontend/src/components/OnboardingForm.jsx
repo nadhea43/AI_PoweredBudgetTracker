@@ -477,7 +477,7 @@ export default function OnboardingForm({ onSubmit }) {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <InputField
               label="Full Name" name="name" value={formData.name}
-              onChange={handleChange} placeholder="e.g. Nadhea Ismail"
+              onChange={handleChange} placeholder="e.g. Ali"
               required error={errors.name}
             />
             <div>
