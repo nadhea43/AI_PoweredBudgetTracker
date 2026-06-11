@@ -197,52 +197,7 @@ export default function FinancialSnapshot({ data, onContinue }) {
         )}
       </div>
 
-      {/* Card 4: Salary coach — only if there's a gap vs median */}
-      {belowMedian && diffPercent > 5 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-4">
-          <div className="flex items-start justify-between mb-3">
-            <div>
-              <h2 className="font-semibold text-gray-800">Salary Negotiation Coach</h2>
-              <p className="text-xs text-gray-400 mt-0.5">
-                You're RM {Math.round(medianIncome - grossSalary).toLocaleString()} below the {stateName} median
-              </p>
-            </div>
-            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-medium">AI #2</span>
-          </div>
-
-          <p className="text-sm text-gray-600 mb-3">
-            Based on your salary gap, here's a personalised raise script you can use at your 3–6 month review:
-          </p>
-
-          <button
-            onClick={() => setRaiseExpanded(prev => !prev)}
-            className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 font-medium mb-3"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform ${raiseExpanded ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-            {raiseExpanded ? "Hide script" : "Show raise script"}
-          </button>
-
-          {raiseExpanded && (
-            <div className="relative">
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
-                {raiseScript || `"I'd like to discuss my compensation. I've been contributing to [specific achievements] over the past [X] months, and based on the ${stateName} market rate of RM ${Math.round(medianIncome).toLocaleString()}/month for my role, I'd like to explore a salary adjustment to RM ${Math.round(grossSalary * 1.15).toLocaleString()}. I'm committed to growing here and believe this reflects my increasing contributions."`}
-              </div>
-              <button
-                onClick={handleCopyScript}
-                className="mt-2 flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-                {copied ? "Copied!" : "Copy to clipboard"}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
+      
       {/* Card 5: Bill audit — only if savings found */}
       {billSavings.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-6 mb-4">

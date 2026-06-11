@@ -30,13 +30,19 @@ function FormScreen() {
       
       // If your backend serves a split { snapshot, plan } payload:
       if (responseData.snapshot || responseData.plan) {
-        setSnapshotData(responseData.snapshot || null)
+        setSnapshotData({
+          ...responseData.snapshot,
+          bill_savings: responseData.plan?.bill_savings || [],
+          raise_script: responseData.plan?.raise_script || "",
+        })
         setAiResult(responseData.plan || null)
       } else {
         // If your backend serves a unified flat dictionary (our Step 7/8 setup):
         setSnapshotData(responseData) 
         setAiResult(responseData)
       }
+
+      
 
       navigate('/snapshot')  // → /snapshot
 

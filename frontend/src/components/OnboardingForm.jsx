@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 
 // ── Reusable input field ─────────────────────────────────────
 const InputField = ({ label, name, value, onChange, placeholder, type = "text", required = false, error }) => (
@@ -67,6 +67,7 @@ const DynamicRow = ({ item, index, onChange, onDelete, categoryOptions, error })
           onChange={(e) => onChange(index, 'amount', e.target.value)}
           placeholder="0"
           min="0"
+          step="any"
           className={`w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500
             ${error?.amount ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
         />
@@ -114,6 +115,157 @@ const Subtotal = ({ items }) => {
   )
 }
 
+// ── Subscription services ────────────────────────────────────
+const SUBSCRIPTION_OPTIONS = [
+  { name: 'Netflix',          price: 55.00,  emoji: '🎬' },
+  { name: 'Spotify',          price: 17.90,  emoji: '🎵' },
+  { name: 'YouTube Premium',  price: 23.90,  emoji: '▶️' },
+  { name: 'Disney+',          price: 29.90,  emoji: '🏰' },
+  { name: 'Apple Music',      price: 16.90,  emoji: '🍎' },
+  { name: 'Amazon Prime',     price: 23.00,  emoji: '📦' },
+  { name: 'Viu',              price: 14.90,  emoji: '📺' },
+  { name: 'Astro',            price: 99.00,  emoji: '📡' },
+  { name: 'Coway',            price: 120.00, emoji: '💧' },
+  { name: 'Canva Pro',        price: 59.90,  emoji: '🎨' },
+  { name: 'iCloud+',          price: 4.90,   emoji: '☁️' },
+  { name: 'Google One',       price: 4.99,   emoji: '🔵' },
+]
+
+const SubscriptionPicker = ({ selections, onChange }) => {
+  const [showOtherForm, setShowOtherForm] = useState(false)
+  const [otherName, setOtherName] = useState('')
+  const [otherPrice, setOtherPrice] = useState('')
+
+  const toggle = (name, defaultPrice) => {
+    const next = { ...selections }
+    if (next[name] !== undefined) delete next[name]
+    else next[name] = defaultPrice
+    onChange(next)
+  }
+
+  const updatePrice = (name, val) => {
+    onChange({ ...selections, [name]: val })
+  }
+
+  const addCustom = () => {
+    const trimmed = otherName.trim()
+    if (!trimmed) return
+    const key = trimmed
+    onChange({ ...selections, [key]: otherPrice || 0 })
+    setOtherName('')
+    setOtherPrice('')
+    setShowOtherForm(false)
+  }
+
+  return (
+    <div className="mt-2 ml-1 p-3 bg-purple-50 rounded-lg border border-purple-100">
+      <p className="text-xs text-purple-600 font-medium mb-2">Pick your active subscriptions</p>
+      <div className="flex flex-wrap gap-2">
+        {SUBSCRIPTION_OPTIONS.map(({ name, price, emoji }) => {
+          const selected = selections[name] !== undefined
+          return (
+            <button
+              key={name}
+              type="button"
+              onClick={() => toggle(name, price)}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors
+                ${selected
+                  ? 'bg-purple-600 text-white border-purple-600'
+                  : 'bg-white text-gray-600 border-gray-300 hover:border-purple-400 hover:text-purple-600'
+                }`}
+            >
+              <span>{emoji}</span>
+              {name}
+            </button>
+          )
+        })}
+
+        {/* Other chip */}
+        <button
+          type="button"
+          onClick={() => setShowOtherForm(prev => !prev)}
+          className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors
+            ${showOtherForm
+              ? 'bg-purple-600 text-white border-purple-600'
+              : 'bg-white text-gray-600 border-dashed border-gray-400 hover:border-purple-400 hover:text-purple-600'
+            }`}
+        >
+          <span>➕</span>
+          Other
+        </button>
+      </div>
+
+      {/* Custom subscription input */}
+      {showOtherForm && (
+        <div className="mt-2 flex items-center gap-2 flex-wrap">
+          <input
+            type="text"
+            value={otherName}
+            onChange={(e) => setOtherName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCustom())}
+            placeholder="e.g. Duolingo Plus"
+            className="flex-1 min-w-0 px-2.5 py-1 border border-purple-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-purple-400 bg-white"
+          />
+          <div className="relative w-24 shrink-0">
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">RM</span>
+            <input
+              type="number"
+              value={otherPrice}
+              min="0"
+              step="any"
+              onChange={(e) => setOtherPrice(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCustom())}
+              placeholder="0"
+              className="w-full pl-7 pr-2 py-1 border border-purple-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-purple-400 bg-white"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={addCustom}
+            className="px-2.5 py-1 bg-purple-600 text-white text-xs rounded hover:bg-purple-700 transition-colors shrink-0"
+          >
+            Add
+          </button>
+        </div>
+      )}
+
+      {Object.keys(selections).length > 0 && (
+        <div className="mt-3 space-y-1.5">
+          {Object.entries(selections).map(([name, amt]) => {
+            const opt = SUBSCRIPTION_OPTIONS.find(o => o.name === name)
+            return (
+              <div key={name} className="flex items-center gap-2">
+                <span className="text-xs text-gray-600 w-36 truncate">{opt ? `${opt.emoji} ${name}` : `✏️ ${name}`}</span>
+                <div className="relative w-28">
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">RM</span>
+                  <input
+                    type="number"
+                    value={amt}
+                    min="0"
+                    step="any"
+                    onChange={(e) => updatePrice(name, e.target.value)}
+                    className="w-full pl-8 pr-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-purple-400"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => toggle(name, amt)}
+                  className="text-gray-400 hover:text-red-400 text-xs"
+                >✕</button>
+              </div>
+            )
+          })}
+          <div className="flex justify-end pt-1 border-t border-purple-100 mt-2">
+            <span className="text-xs text-purple-700 font-semibold">
+              Total: RM {Object.values(selections).reduce((s, v) => s + (Number(v) || 0), 0).toFixed(2)}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Category presets ─────────────────────────────────────────
 const COMMITMENT_CATEGORIES = [
   'Rent', 'Study Loan (PTPTN)', 'Car Loan', 'Motorcycle Loan',
@@ -124,7 +276,7 @@ const COMMITMENT_CATEGORIES = [
 const SPENDING_CATEGORIES = [
   'Food & Drinks', 'Groceries', 'Transport / Petrol',
   'Grab / Taxi', 'Entertainment', 'Shopping / Clothing',
-  'Gym / Sports', 'Subscriptions (Netflix etc.)',
+  'Gym / Sports', 'Subscriptions',
   'Medical / Pharmacy', 'Self-care / Grooming',
 ]
 
@@ -140,7 +292,8 @@ export default function OnboardingForm({ onSubmit }) {
     gross_salary: '',
     savings_goal: '',
     goal_months: '',
-    phone_provider: "", 
+    phone_provider: "",
+    wifi_provider: "",
   })
 
   // Dynamic lists — each item: { id, label, amount, customLabel? }
@@ -152,13 +305,13 @@ export default function OnboardingForm({ onSubmit }) {
   ])
 
   const [spendings, setSpendings] = useState([
-    { id: 1, label: 'Food & Drinks',        amount: '' },
-    { id: 2, label: 'Transport / Petrol',   amount: '' },
-    { id: 3, label: 'Entertainment',        amount: '' },
+    { id: 1, label: 'Food & Drinks',        amount: '', subscriptions: {} },
+    { id: 2, label: 'Transport / Petrol',   amount: '', subscriptions: {} },
+    { id: 3, label: 'Entertainment',        amount: '', subscriptions: {} },
   ])
 
   const [errors, setErrors] = useState({})
-  let nextId = 100  // simple id counter
+  const nextIdRef = useRef(100)
 
   // ── Generic handlers for dynamic lists ──────────────────────
   const makeHandlers = (list, setList) => ({
@@ -171,9 +324,16 @@ export default function OnboardingForm({ onSubmit }) {
       setList(prev => prev.filter((_, i) => i !== index))
     },
     onAdd: (defaultLabel = '') => {
-      setList(prev => [...prev, { id: nextId++, label: defaultLabel, amount: '' }])
+      setList(prev => [...prev, { id: nextIdRef.current++, label: defaultLabel, amount: '', subscriptions: {} }])
     },
   })
+
+  const handleSubscriptionChange = (index, newSelections) => {
+    const total = Object.values(newSelections).reduce((s, v) => s + (Number(v) || 0), 0)
+    setSpendings(prev => prev.map((item, i) =>
+      i === index ? { ...item, subscriptions: newSelections, amount: total > 0 ? String(total.toFixed(2)) : '' } : item
+    ))
+  }
 
   const commitmentHandlers = makeHandlers(commitments, setCommitments)
   const spendingHandlers   = makeHandlers(spendings, setSpendings)
@@ -226,7 +386,13 @@ export default function OnboardingForm({ onSubmit }) {
 
     const variableSpendings = spendings
       .filter(item => item.label && Number(item.amount) > 0)
-      .map(item => ({ label: resolveLabel(item), amount: Number(item.amount) }))
+      .map(item => ({
+        label: resolveLabel(item),
+        amount: Number(item.amount),
+        ...(item.label === 'Subscriptions' && Object.keys(item.subscriptions || {}).length > 0
+          ? { subscription_breakdown: Object.entries(item.subscriptions).map(([name, amt]) => ({ name, amount: Number(amt) })) }
+          : {}),
+      }))
 
     // Backwards-compatible flat fields for your existing backend
     // (sums all commitments into named buckets it recognises, puts extras in extra_commitments)
@@ -269,6 +435,7 @@ export default function OnboardingForm({ onSubmit }) {
       savings_goal: Number(formData.savings_goal),
       goal_months:  Number(formData.goal_months),
       phone_provider: formData.phone_provider || "",
+      wifi_provider:  formData.wifi_provider  || "",
 
       // Flat fields your backend already understands
       ...flatCommitments,
@@ -389,14 +556,13 @@ export default function OnboardingForm({ onSubmit }) {
           )}
            {/* wifi provider selector — shown only if user has a wifi bill row */}
           {commitments.some(item =>
-            (item.label || "").toLowerCase().includes("phone") ||
-            (item.label || "").toLowerCase().includes("bill") 
+            (item.label || "").toLowerCase().includes("wifi")
           ) && (
             <div className="mt-2 flex items-center gap-3">
               <label className="text-xs text-gray-500 shrink-0">Your wifi Bill provider :</label>
               <select
-                value={formData.phone_provider}
-                onChange={(e) => setFormData(prev => ({ ...prev, phone_provider: e.target.value }))}
+                value={formData.wifi_provider}
+                onChange={(e) => setFormData(prev => ({ ...prev, wifi_provider: e.target.value }))}
                 className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Select provider (optional)</option>
@@ -439,6 +605,12 @@ export default function OnboardingForm({ onSubmit }) {
                   categoryOptions={SPENDING_CATEGORIES}
                   error={errors[`spend_${index}`] ? { amount: true } : null}
                 />
+                {item.label === 'Subscriptions' && (
+                  <SubscriptionPicker
+                    selections={item.subscriptions || {}}
+                    onChange={(sel) => handleSubscriptionChange(index, sel)}
+                  />
+                )}
                 {errors[`spend_${index}`] && (
                   <p className="text-red-500 text-xs mt-1 ml-1">{errors[`spend_${index}`]}</p>
                 )}

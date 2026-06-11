@@ -62,14 +62,40 @@ def build_snapshot(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, A
     anomalies = detect_anomalies(fixed_list + variable_list)
 
     phone_provider = (payload.get("phone_provider") or "").strip()
-    bill_items = [
-        i for i in fixed_list
-        if any(k in (i.get("label") or "").lower() for k in ("phone", "wifi", "internet", "broadband", "insurance", "subscription"))
-    ]
-    bill_context_lines = "\n".join(
-        f"  - {i.get('label')}: RM {i.get('amount')}/month" + (f", provider: {phone_provider}" if phone_provider else " (provider not specified)")
-        for i in bill_items
-    ) if bill_items else "  - none declared"
+    wifi_provider  = (payload.get("wifi_provider")  or "").strip()
+
+    BILL_KEYWORDS = (
+        "phone", "wifi", "internet", "broadband", "insurance",
+        "subscription", "celcom", "maxis", "digi", "unifi",
+        "tm", "netflix", "spotify", "astro", "streamyx",
+        "disney", "apple music", "amazon prime", "viu", "coway",
+    )
+
+    fixed_bill_items    = [i for i in fixed_list    if any(k in (i.get("label") or "").lower() for k in BILL_KEYWORDS)]
+    variable_bill_items = [i for i in variable_list if any(k in (i.get("label") or "").lower() for k in BILL_KEYWORDS)]
+
+    context_parts = []
+    for i in fixed_bill_items:
+        label = i.get("label", "")
+        line  = f"  - {label}: RM {i.get('amount')}/month"
+        if "phone" in label.lower() and phone_provider:
+            line += f", provider: {phone_provider}"
+        elif "wifi" in label.lower() and wifi_provider:
+            line += f", provider: {wifi_provider}"
+        context_parts.append(line)
+
+    for i in variable_bill_items:
+        label = i.get("label", "")
+        line  = f"  - {label}: RM {i.get('amount')}/month"
+        breakdown = i.get("subscription_breakdown", [])
+        if breakdown:
+            items_str = ", ".join(f"{b['name']} (RM {b['amount']})" for b in breakdown)
+            line += f" — includes: {items_str}"
+        context_parts.append(line)
+
+    bill_context_lines = "\n".join(context_parts) if context_parts else "  - none declared"
+
+    print("bill_context_lines:", bill_context_lines)
 
     snapshot = {
         "name":              payload.get("name", "there"),
@@ -222,6 +248,12 @@ Phone/WiFi/bill items declared by user:
 5. GOAL SCENARIOS: Generate exactly 3 "what-if" paths to reach RM {goal_amount}.
 6. INVESTMENT ADVICE: One short paragraph advising whether to prioritise EPF voluntary top-up vs ASB.
 7. BILL SAVINGS: Audit only phone bills, WiFi/broadband bills, insurance, and subscriptions.
+   IMPORTANT rules for bill_savings:
+   - Only include an item if you can identify a GENUINELY CHEAPER alternative (cheaper_amount MUST be strictly less than current_amount).
+   - Never recommend a plan that costs more than what the user currently pays.
+   - If the user's current plan is already the cheapest or best-value available, do NOT include that item in bill_savings at all.
+   - For subscriptions, list each unused or cancellable service individually; suggest cancelling the ones the user is least likely to use.
+   - monthly_saving = current_amount - cheaper_amount (must be positive). annual_saving = monthly_saving × 12.
 
 === RETURN THIS EXACT JSON SCHEMA ===
 {{
@@ -237,8 +269,16 @@ Phone/WiFi/bill items declared by user:
     {{ "label": "...", "action": "...", "monthly_saving": 150, "new_months": 14, "difficulty": "Medium" }}
   ],
   "investment_advice": "...",
-  "bill_savings": []
+  "bill_savings": [
+    {{ "item": "Phone Bill", "current_amount": 45, "cheaper_option": "Maxis Lite Plan", "cheaper_amount": 30, "monthly_saving": 15, "annual_saving": 180 }}
+  ]
 }}"""
+
+    print("\n" + "="*60)
+    print("[Gemini] PROMPT SENT:")
+    print("="*60)
+    print(prompt)
+    print("="*60 + "\n")
 
     try:
         ai_response  = generate_text(prompt, max_tokens=1800, temperature=0.2)
